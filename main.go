@@ -82,7 +82,7 @@ func main() {
 }
 
 //Function for checking messages and taking action
-func messageCheck(s *discordgo.Session, m *discordgo.Message) {
+func messageCheck(m *discordgo.Message) {
 
 	//Check if someone has been mentioned
 	if len(m.Mentions) != 0 {
@@ -105,13 +105,13 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	messageCheck(s, m.Message)
+	messageCheck(m.Message)
 }
 
 //Function called whenever a message is modified
-func messageUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
+func messageUpdate(_ *discordgo.Session, m *discordgo.MessageUpdate) {
 
-	messageCheck(s, m.Message)
+	messageCheck(m.Message)
 }
 
 //Function called whenever a message is deleted for updating the corresponding value in the database
