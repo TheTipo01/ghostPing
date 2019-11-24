@@ -128,7 +128,8 @@ func messageDeleted(_ *discordgo.Session, m *discordgo.MessageDelete) {
 		log.Println("Error preparing query, ", err)
 	}
 
-	_, err = statement.Exec(m.ID)
+	res, err := statement.Exec(m.ID)
+
 	if err != nil {
 		log.Println("Error updating deleted message, ", err)
 	}
@@ -138,7 +139,10 @@ func messageDeleted(_ *discordgo.Session, m *discordgo.MessageDelete) {
 		log.Println("Error closing database connection, ", err)
 	}
 
-	html()
+	if rows, _ := res.RowsAffected(); rows > 0 {
+		html()
+	}
+
 }
 
 //Function for handling database insertion of pings
