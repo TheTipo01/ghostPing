@@ -47,7 +47,7 @@ func init() {
 	err = database.Close()
 
 	if err != nil {
-		log.Println("Error closing database, ", err)
+		log.Println("Error closing database,", err)
 	}
 }
 
@@ -59,6 +59,7 @@ func main() {
 		return
 	}
 
+	//Handler for discord events
 	dg.AddHandler(messageCreate)
 	dg.AddHandler(messageUpdate)
 	dg.AddHandler(messageDeleted)
@@ -101,6 +102,7 @@ func messageCheck(m *discordgo.Message) {
 
 //Function called whenever a new message is created
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+
 	if m.Message.Author.ID == s.State.User.ID {
 		return
 	}
@@ -116,27 +118,28 @@ func messageUpdate(_ *discordgo.Session, m *discordgo.MessageUpdate) {
 
 //Function called whenever a message is deleted for updating the corresponding value in the database
 func messageDeleted(_ *discordgo.Session, m *discordgo.MessageDelete) {
+
 	mutex.Lock()
 	database, err := sql.Open("sqlite3", "./ghostpingers.db")
 	if err != nil {
-		log.Println("Error opening database connection, ", err)
+		log.Println("Error opening database connection,", err)
 	}
 
 	statement, err := database.Prepare("UPDATE stronzi SET Eliminato = 1 WHERE MessageId = ?")
 
 	if err != nil {
-		log.Println("Error preparing query, ", err)
+		log.Println("Error preparing query,", err)
 	}
 
 	res, err := statement.Exec(m.ID)
 
 	if err != nil {
-		log.Println("Error updating deleted message, ", err)
+		log.Println("Error updating deleted message,", err)
 	}
 
 	err = database.Close()
 	if err != nil {
-		log.Println("Error closing database connection, ", err)
+		log.Println("Error closing database connection,", err)
 	}
 
 	if rows, _ := res.RowsAffected(); rows > 0 {
@@ -147,6 +150,7 @@ func messageDeleted(_ *discordgo.Session, m *discordgo.MessageDelete) {
 
 //Function for handling database insertion of pings
 func insertion(ping *GhostPing) {
+
 	mutex.Lock()
 	database, err := sql.Open("sqlite3", "./ghostpingers.db")
 
@@ -174,6 +178,7 @@ func insertion(ping *GhostPing) {
 
 //Function for generating an HTML page to show a list of pings
 func html() {
+
 	//Variables
 	var MenzionatoId, MenzionatoreId, ServerId, ChannellId, MessageId string
 	var oraora time.Time
@@ -188,18 +193,18 @@ func html() {
 	//Creating session
 	s, err := discordgo.New("Bot " + Token)
 	if err != nil {
-		log.Println("Error creating session, ", err)
+		log.Println("Error creating session,", err)
 	}
 
 	//Querying database
 	rows, err := database.Query("SELECT * FROM stronzi WHERE Eliminato = 1 ORDER BY oraora DESC")
 	if err != nil {
-		log.Println("Error querying database, ", err)
+		log.Println("Error querying database,", err)
 	}
 
 	//Various string for formatting html in a tidy way
-	altro := "<!DOCTYPE html><html lang=\"it\"><head><title>Ghostpingers</title><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><link rel=\"stylesheet\" href=\"css/bootstrap.min.css\"></head><body><div class=\"container\"><h2>Persone che pingano</h2><p>Lista delle persone che pingano altre persone:</p><table class=\"table table-hover\"><thead><tr><th>Username Menzionato</th><th>Ora e data</th><th>User Menzionatore</th><th>Server</th><th>Canale</th><th>Link Messaggio</th></tr></thead><tbody>"
-	mezzo := "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td><a href=\"%s\">Link</a></td></tr>"
+	altro := "<!DOCTYPE html><html lang=\"it\"><head><title>Ghostpingers</title><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><link rel=\"stylesheet\" href=\"css/bootstrap.min.css\"></head><body><div class=\"container\"><h2>Persone che pingano</h2><p>Lista delle persone che pingano altre persone:</p><table class=\"table table-hover\"><thead><tr><th>Username Menzionato</th><th>Ora e data</th><th>User Menzionatore</th><th>Server</th><th>Canale</th></tr></thead><tbody>"
+	mezzo := "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
 
 	for rows.Next() {
 		err = rows.Scan(&MenzionatoId, &oraora, &MenzionatoreId, &ServerId, &ChannellId, &MessageId, &eliminato)
@@ -213,9 +218,9 @@ func html() {
 		canale, _ := s.Channel(ChannellId)
 
 		if MenzionatoId != "EVERYONE" {
-			altro += fmt.Sprintf(mezzo, menzionato.Username, oraora.Format("02/01/2006 - 15:04:05"), menzionatore.Username, server.Name, canale.Name, "https://discordapp.com/channels/"+ServerId+"/"+ChannellId+"/"+MessageId+"/")
+			altro += fmt.Sprintf(mezzo, menzionato.Username, oraora.Format("02/01/2006 - 15:04:05"), menzionatore.Username, server.Name, canale.Name)
 		} else {
-			altro += fmt.Sprintf(mezzo, MenzionatoId, oraora.Format("02/01/2006 - 15:04:05"), menzionatore.Username, server.Name, canale.Name, "https://discordapp.com/channels/"+ServerId+"/"+ChannellId+"/"+MessageId+"/")
+			altro += fmt.Sprintf(mezzo, MenzionatoId, oraora.Format("02/01/2006 - 15:04:05"), menzionatore.Username, server.Name, canale.Name)
 		}
 
 	}
