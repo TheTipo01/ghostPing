@@ -17,6 +17,8 @@ import (
 var (
 	Token string
 	mutex = &sync.Mutex{}
+	dataSourceName = "./ghostpingers.db"
+	driverName = "sqlite3"
 )
 
 //Structure for holding a discord ping
@@ -36,7 +38,7 @@ func init() {
 	flag.Parse()
 
 	//Database
-	database, _ := sql.Open("sqlite3", "./ghostpingers.db")
+	database, _ := sql.Open(driverName, dataSourceName)
 	statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS stronzi (MenzionatoId TEXT, oraora datetime, MenzionatoreId TEXT, ServerId TEXT, ChannellId TEXT, MessageId TEXT PRIMARY KEY, Eliminato INTEGER)")
 
 	_, err := statement.Exec()
@@ -120,7 +122,9 @@ func messageUpdate(_ *discordgo.Session, m *discordgo.MessageUpdate) {
 func messageDeleted(_ *discordgo.Session, m *discordgo.MessageDelete) {
 
 	mutex.Lock()
-	database, err := sql.Open("sqlite3", "./ghostpingers.db")
+	defer mutex.Unlock()
+
+	database, err := sql.Open(driverName, dataSourceName)
 	if err != nil {
 		log.Println("Error opening database connection,", err)
 	}
@@ -152,7 +156,9 @@ func messageDeleted(_ *discordgo.Session, m *discordgo.MessageDelete) {
 func insertion(ping *GhostPing) {
 
 	mutex.Lock()
-	database, err := sql.Open("sqlite3", "./ghostpingers.db")
+	defer mutex.Unlock()
+
+	database, err := sql.Open(driverName, dataSourceName)
 
 	if err != nil {
 		log.Println("Error opening database connection,", err)
@@ -172,7 +178,6 @@ func insertion(ping *GhostPing) {
 	if err != nil {
 		log.Println("Error closing database connection,", err)
 	}
-	mutex.Unlock()
 
 }
 
@@ -185,7 +190,7 @@ func html() {
 	var eliminato bool
 
 	//Opening database
-	database, err := sql.Open("sqlite3", "./ghostpingers.db")
+	database, err := sql.Open(driverName, dataSourceName)
 	if err != nil {
 		log.Println("Error opening database connection,", err)
 	}
@@ -250,5 +255,4 @@ func html() {
 		log.Println("Error closing database connection,", err)
 	}
 
-	mutex.Unlock()
 }
