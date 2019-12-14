@@ -39,7 +39,7 @@ func init() {
 
 	//Database
 	database, _ := sql.Open(driverName, dataSourceName)
-	statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS stronzi (MenzionatoId TEXT, oraora datetime, MenzionatoreId TEXT, ServerId TEXT, ChannellId TEXT, MessageId TEXT PRIMARY KEY, Eliminato INTEGER)")
+	statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS stronzi (MenzionatoId TEXT, oraora datetime, MenzionatoreId TEXT, ServerId TEXT, ChannellId TEXT, MessageId TEXT, Eliminato INTEGER)")
 
 	_, err := statement.Exec()
 	if err != nil {
