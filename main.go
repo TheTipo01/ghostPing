@@ -214,7 +214,7 @@ func html() {
 	for rows.Next() {
 		err = rows.Scan(&MenzionatoId, &oraora, &MenzionatoreId, &ServerId, &ChannellId, &MessageId, &eliminato)
 		if err != nil {
-			log.Println("Error scannings rows from query,", err)
+			log.Println("Error scanning rows from query,", err)
 		}
 
 		menzionato, _ := s.User(MenzionatoId)
