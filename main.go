@@ -17,8 +17,9 @@ import (
 var (
 	Token string
 	mutex = &sync.Mutex{}
-	dataSourceName = "./ghostpingers.db"
+	dataSourceName = "./ghostpingers.db:databaselocked.sqlite?cache=shared&mode=rwc"
 	driverName = "sqlite3"
+	database *sql.DB
 )
 
 //Structure for holding a discord ping
@@ -38,7 +39,7 @@ func init() {
 	flag.Parse()
 
 	//Database
-	database, _ := sql.Open(driverName, dataSourceName)
+	database, _ = sql.Open(driverName, dataSourceName)
 	statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS stronzi (MenzionatoId TEXT, oraora datetime, MenzionatoreId TEXT, ServerId TEXT, ChannellId TEXT, MessageId TEXT, Eliminato INTEGER)")
 
 	_, err := statement.Exec()
@@ -46,11 +47,6 @@ func init() {
 		log.Println("Error creating table,", err)
 	}
 
-	err = database.Close()
-
-	if err != nil {
-		log.Println("Error closing database,", err)
-	}
 }
 
 func main() {
@@ -78,9 +74,13 @@ func main() {
 	<-sc
 
 	err = dg.Close()
-
 	if err != nil {
 		log.Println("Error closing discord session,", err)
+	}
+
+	err = database.Close()
+	if err != nil {
+		log.Println("Error closing database,", err)
 	}
 }
 
@@ -115,19 +115,8 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 //Function called whenever a message is modified
 func messageUpdate(_ *discordgo.Session, m *discordgo.MessageUpdate) {
 
-	messageCheck(m.Message)
-}
-
-//Function called whenever a message is deleted for updating the corresponding value in the database
-func messageDeleted(_ *discordgo.Session, m *discordgo.MessageDelete) {
-
 	mutex.Lock()
 	defer mutex.Unlock()
-
-	database, err := sql.Open(driverName, dataSourceName)
-	if err != nil {
-		log.Println("Error opening database connection,", err)
-	}
 
 	statement, err := database.Prepare("UPDATE stronzi SET Eliminato = 1 WHERE MessageId = ?")
 
@@ -141,9 +130,30 @@ func messageDeleted(_ *discordgo.Session, m *discordgo.MessageDelete) {
 		log.Println("Error updating deleted message,", err)
 	}
 
-	err = database.Close()
+	messageCheck(m.Message)
+
+	if rows, _ := res.RowsAffected(); rows > 0 {
+		html()
+	}
+	
+}
+
+//Function called whenever a message is deleted for updating the corresponding value in the database
+func messageDeleted(_ *discordgo.Session, m *discordgo.MessageDelete) {
+
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	statement, err := database.Prepare("UPDATE stronzi SET Eliminato = 1 WHERE MessageId = ?")
+
 	if err != nil {
-		log.Println("Error closing database connection,", err)
+		log.Println("Error preparing query,", err)
+	}
+
+	res, err := statement.Exec(m.ID)
+
+	if err != nil {
+		log.Println("Error updating deleted message,", err)
 	}
 
 	if rows, _ := res.RowsAffected(); rows > 0 {
@@ -158,12 +168,6 @@ func insertion(ping *GhostPing) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	database, err := sql.Open(driverName, dataSourceName)
-
-	if err != nil {
-		log.Println("Error opening database connection,", err)
-	}
-
 	statement, err := database.Prepare("INSERT INTO stronzi (MenzionatoId, oraora, MenzionatoreId, ServerId, ChannellId, MessageId, Eliminato) VALUES (?, ?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		log.Println("Error preparing query,", err)
@@ -172,11 +176,6 @@ func insertion(ping *GhostPing) {
 	_, err = statement.Exec(ping.IdMenzionato, ping.Timestamp, ping.IdMenzionatore, ping.IdServer, ping.IdCanale, ping.IdMessaggio, ping.Eliminato)
 	if err != nil {
 		log.Println("Error inserting into the database,", err)
-	}
-
-	err = database.Close()
-	if err != nil {
-		log.Println("Error closing database connection,", err)
 	}
 
 }
@@ -188,12 +187,6 @@ func html() {
 	var MenzionatoId, MenzionatoreId, ServerId, ChannellId, MessageId string
 	var oraora time.Time
 	var eliminato bool
-
-	//Opening database
-	database, err := sql.Open(driverName, dataSourceName)
-	if err != nil {
-		log.Println("Error opening database connection,", err)
-	}
 
 	//Creating session
 	s, err := discordgo.New("Bot " + Token)
@@ -248,11 +241,6 @@ func html() {
 	err = s.Close()
 	if err != nil {
 		log.Println("Error closing session,", err)
-	}
-
-	err = database.Close()
-	if err != nil {
-		log.Println("Error closing database connection,", err)
 	}
 
 }
