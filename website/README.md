@@ -1,0 +1,1 @@
+Page written in PHP for showing ghost pings.
