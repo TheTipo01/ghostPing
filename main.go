@@ -5,21 +5,19 @@ import (
 	"flag"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 )
 
 var (
-	Token string
-	mutex = &sync.Mutex{}
-	dataSourceName = "./ghostpingers.db:databaselocked.sqlite?cache=shared&mode=rwc"
-	driverName = "sqlite3"
-	database *sql.DB
+	Token          string
+	DataSourceName string
+	driverName     = "mysql"
+	database       *sql.DB
 )
 
 //Structure for holding a discord ping
@@ -34,19 +32,23 @@ type GhostPing struct {
 }
 
 func init() {
+	var err error
 	//Token
 	flag.StringVar(&Token, "t", "", "Bot Token")
+	flag.StringVar(&DataSourceName, "d", "", "Data source name")
 	flag.Parse()
 
-	//Database
-	database, _ = sql.Open(driverName, dataSourceName)
-	statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS stronzi (MenzionatoId TEXT, oraora datetime, MenzionatoreId TEXT, ServerId TEXT, ChannellId TEXT, MessageId TEXT, Eliminato INTEGER)")
-
-	_, err := statement.Exec()
+	//Prepare the tables
+	database, err = sql.Open(driverName, DataSourceName)
 	if err != nil {
-		log.Println("Error creating table,", err)
+		log.Println("Error opening db connection,", err)
+		return
 	}
 
+	execQuery(tblUsers, database)
+	execQuery(tblServers, database)
+	execQuery(tblChannels, database)
+	execQuery(tblPings, database)
 }
 
 func main() {
@@ -62,10 +64,18 @@ func main() {
 	dg.AddHandler(messageUpdate)
 	dg.AddHandler(messageDeleted)
 
+	dg.Identify.Intents = discordgo.MakeIntent(discordgo.IntentsGuildMessages)
+
+	// Open a websocket connection to Discord and begin listening.
 	err = dg.Open()
 	if err != nil {
-		log.Println("Error opening connection,", err)
+		fmt.Println("Error opening connection,", err)
 		return
+	}
+
+	err = dg.UpdateStatus(0, "ghostpin.ga")
+	if err != nil {
+		fmt.Println("Can't set status,", err)
 	}
 
 	log.Println("Bot is now running. Press CTRL-C to exit.")
@@ -85,20 +95,20 @@ func main() {
 }
 
 //Function for checking messages and taking action
-func messageCheck(m *discordgo.Message) {
+func messageCheck(m *discordgo.Message, s *discordgo.Session) {
 
 	//Check if someone has been mentioned
 	if len(m.Mentions) != 0 {
 		for _, menzioni := range m.Mentions {
 			ping := GhostPing{menzioni.ID, time.Now(), m.Author.ID, m.GuildID, m.ChannelID, m.ID, false}
-			insertion(&ping)
+			insertion(&ping, s)
 		}
 	}
 
 	//Check if everyone is mentioned
 	if m.MentionEveryone {
 		ping := GhostPing{"everyone", time.Now(), m.Author.ID, m.GuildID, m.ChannelID, m.ID, false}
-		insertion(&ping)
+		insertion(&ping, s)
 	}
 }
 
@@ -109,138 +119,104 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	messageCheck(m.Message)
+	messageCheck(m.Message, s)
 }
 
 //Function called whenever a message is modified
-func messageUpdate(_ *discordgo.Session, m *discordgo.MessageUpdate) {
+func messageUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
 
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	statement, err := database.Prepare("UPDATE stronzi SET Eliminato = 1 WHERE MessageId = ?")
+	statement, err := database.Prepare("UPDATE pings SET deleted = 1 WHERE messageId = ?")
 
 	if err != nil {
 		log.Println("Error preparing query,", err)
 	}
 
-	res, err := statement.Exec(m.ID)
+	_, err = statement.Exec(m.ID)
 
 	if err != nil {
 		log.Println("Error updating deleted message,", err)
 	}
 
-	messageCheck(m.Message)
+	messageCheck(m.Message, s)
 
-	if rows, _ := res.RowsAffected(); rows > 0 {
-		html()
-	}
-	
 }
 
 //Function called whenever a message is deleted for updating the corresponding value in the database
 func messageDeleted(_ *discordgo.Session, m *discordgo.MessageDelete) {
 
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	statement, err := database.Prepare("UPDATE stronzi SET Eliminato = 1 WHERE MessageId = ?")
+	statement, err := database.Prepare("UPDATE pings SET deleted = 1 WHERE messageId = ?")
 
 	if err != nil {
 		log.Println("Error preparing query,", err)
 	}
 
-	res, err := statement.Exec(m.ID)
+	_, err = statement.Exec(m.ID)
 
 	if err != nil {
 		log.Println("Error updating deleted message,", err)
 	}
 
-	if rows, _ := res.RowsAffected(); rows > 0 {
-		html()
-	}
-
 }
 
 //Function for handling database insertion of pings
-func insertion(ping *GhostPing) {
+func insertion(ping *GhostPing, s *discordgo.Session) {
+	//Menzionatore
+	statement, err := database.Prepare("INSERT INTO users (id, nickname) VALUES (?, ?)")
+	if err != nil {
+		log.Println("Error preparing query,", err)
+	}
+	member, _ := s.GuildMember(ping.IdServer, ping.IdMenzionatore)
 
-	mutex.Lock()
-	defer mutex.Unlock()
+	_, err = statement.Exec(ping.IdMenzionatore, member.User.Username)
+	if err != nil {
+		log.Println("Error inserting menzionatore into the database,", err)
+	}
 
-	statement, err := database.Prepare("INSERT INTO stronzi (MenzionatoId, oraora, MenzionatoreId, ServerId, ChannellId, MessageId, Eliminato) VALUES (?, ?, ?, ?, ?, ?, ?)")
+	//Menzionato
+	statement, err = database.Prepare("INSERT INTO users (id, nickname) VALUES (?, ?)")
+	if err != nil {
+		log.Println("Error preparing query,", err)
+	}
+	member, _ = s.GuildMember(ping.IdServer, ping.IdMenzionato)
+
+	_, err = statement.Exec(ping.IdMenzionato, member.User.Username)
+	if err != nil {
+		log.Println("Error inserting menzionato into the database,", err)
+	}
+
+	//Server
+	statement, err = database.Prepare("INSERT INTO server (id, name) VALUES (?, ?)")
+	if err != nil {
+		log.Println("Error preparing query,", err)
+	}
+	server, _ := s.Guild(ping.IdServer)
+
+	_, err = statement.Exec(ping.IdServer, server.Name)
+	if err != nil {
+		log.Println("Error inserting server into the database,", err)
+	}
+
+	//Channel
+	statement, err = database.Prepare("INSERT INTO channels (id, name, serverId) VALUES (?, ?, ?)")
+	if err != nil {
+		log.Println("Error preparing query,", err)
+	}
+	channel, _ := s.Channel(ping.IdCanale)
+
+	_, err = statement.Exec(ping.IdCanale, channel.Name, ping.IdServer)
+	if err != nil {
+		log.Println("Error inserting channel into the database,", err)
+	}
+
+	//Ping
+	statement, err = database.Prepare("INSERT INTO pings (menzionatoreId, menzionatoId, channelId, serverId, timestamp, messageId) VALUES (?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		log.Println("Error preparing query,", err)
 	}
 
-	_, err = statement.Exec(ping.IdMenzionato, ping.Timestamp, ping.IdMenzionatore, ping.IdServer, ping.IdCanale, ping.IdMessaggio, ping.Eliminato)
+	_, err = statement.Exec(ping.IdMenzionatore, ping.IdMenzionato, ping.IdCanale, ping.IdServer, ping.Timestamp, ping.IdMessaggio)
 	if err != nil {
-		log.Println("Error inserting into the database,", err)
-	}
-
-}
-
-//Function for generating an HTML page to show a list of pings
-func html() {
-
-	//Variables
-	var MenzionatoId, MenzionatoreId, ServerId, ChannellId, MessageId string
-	var oraora time.Time
-	var eliminato bool
-
-	//Creating session
-	s, err := discordgo.New("Bot " + Token)
-	if err != nil {
-		log.Println("Error creating session,", err)
-	}
-
-	//Querying database
-	rows, err := database.Query("SELECT * FROM stronzi WHERE Eliminato = 1 ORDER BY oraora DESC")
-	if err != nil {
-		log.Println("Error querying database,", err)
-	}
-
-	//Various string for formatting html in a tidy way
-	altro := "<!DOCTYPE html><html lang=\"it\"><head><title>Ghostpingers</title><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><link rel=\"stylesheet\" href=\"css/bootstrap.min.css\"></head><body><div class=\"container\"><h2>Persone che pingano</h2><p>Lista delle persone che pingano altre persone:</p><table class=\"table table-hover\"><thead><tr><th>Username Menzionato</th><th>Ora e data</th><th>User Menzionatore</th><th>Server</th><th>Canale</th></tr></thead><tbody>"
-	mezzo := "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"
-
-	for rows.Next() {
-		err = rows.Scan(&MenzionatoId, &oraora, &MenzionatoreId, &ServerId, &ChannellId, &MessageId, &eliminato)
-		if err != nil {
-			log.Println("Error scanning rows from query,", err)
-		}
-
-		menzionato, _ := s.User(MenzionatoId)
-		menzionatore, _ := s.User(MenzionatoreId)
-		server, _ := s.Guild(ServerId)
-		canale, _ := s.Channel(ChannellId)
-
-		if MenzionatoId != "EVERYONE" {
-			altro += fmt.Sprintf(mezzo, menzionato.Username, oraora.Format("02/01/2006 - 15:04:05"), menzionatore.Username, server.Name, canale.Name)
-		} else {
-			altro += fmt.Sprintf(mezzo, MenzionatoId, oraora.Format("02/01/2006 - 15:04:05"), menzionatore.Username, server.Name, canale.Name)
-		}
-
-	}
-
-	f, err := os.Create("./index.html")
-	if err != nil {
-		log.Println("Error creating file,", err)
-	}
-
-	_, err = f.WriteString(altro + "</tbody></table></div></body></html>")
-	if err != nil {
-		log.Println("Error writing string to file,", err)
-	}
-
-	err = f.Close()
-	if err != nil {
-		log.Println("Error closing file,", err)
-	}
-
-	err = s.Close()
-	if err != nil {
-		log.Println("Error closing session,", err)
+		log.Println("Error inserting ping into the database,", err)
 	}
 
 }

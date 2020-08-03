@@ -1,8 +1,8 @@
 module ghostPing
 
-go 1.13
+go 1.14
 
 require (
-	github.com/bwmarrin/discordgo v0.20.0
-	github.com/mattn/go-sqlite3 v2.0.2+incompatible
+	github.com/bwmarrin/discordgo v0.22.0 // indirect
+	github.com/go-sql-driver/mysql v1.5.0 // indirect
 )
