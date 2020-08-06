@@ -63,6 +63,7 @@ func main() {
 	dg.AddHandler(messageCreate)
 	dg.AddHandler(messageUpdate)
 	dg.AddHandler(messageDeleted)
+	dg.AddHandler(ready)
 
 	dg.Identify.Intents = discordgo.MakeIntent(discordgo.IntentsGuildMessages)
 
@@ -71,11 +72,6 @@ func main() {
 	if err != nil {
 		fmt.Println("Error opening connection,", err)
 		return
-	}
-
-	err = dg.UpdateStatus(0, "ghostpin.ga")
-	if err != nil {
-		fmt.Println("Can't set status,", err)
 	}
 
 	log.Println("Bot is now running. Press CTRL-C to exit.")
@@ -91,6 +87,15 @@ func main() {
 	err = database.Close()
 	if err != nil {
 		log.Println("Error closing database,", err)
+	}
+}
+
+func ready(s *discordgo.Session, _ *discordgo.Ready) {
+
+	// Set the playing status.
+	err := s.UpdateStatus(0, "ghostping.ga")
+	if err != nil {
+		fmt.Println("Can't set status,", err)
 	}
 }
 
