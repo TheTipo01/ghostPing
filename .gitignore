@@ -18,3 +18,5 @@
 .idea/
 dist/
 *.db
+
+config.yml

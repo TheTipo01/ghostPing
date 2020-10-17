@@ -2,10 +2,10 @@ package main
 
 import (
 	"database/sql"
-	"flag"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/spf13/viper"
 	"log"
 	"os"
 	"os/signal"
@@ -34,9 +34,21 @@ type GhostPing struct {
 func init() {
 	var err error
 	//Token
-	flag.StringVar(&Token, "t", "", "Bot Token")
-	flag.StringVar(&DataSourceName, "d", "", "Data source name")
-	flag.Parse()
+	viper.SetConfigName("config")
+	viper.SetConfigType("yml")
+	viper.AddConfigPath(".")
+
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			// Config file not found
+			fmt.Println("Config file not found! See example_config.yml")
+			return
+		}
+	} else {
+		// Config file found
+		Token = viper.GetString("token")
+		DataSourceName = viper.GetString("datasourcename")
+	}
 
 	//Prepare the tables
 	database, err = sql.Open(driverName, DataSourceName)
