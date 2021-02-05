@@ -105,7 +105,7 @@ func main() {
 func ready(s *discordgo.Session, _ *discordgo.Ready) {
 
 	// Set the playing status.
-	err := s.UpdateStatus(0, "ghostping.ga")
+	err := s.UpdateGameStatus(0, "ghostping.ga")
 	if err != nil {
 		fmt.Println("Can't set status,", err)
 	}
