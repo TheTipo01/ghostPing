@@ -7,3 +7,5 @@ Discord bot for saving pings in a mysql db.
 Start the program with the following parameters: 
 
 -t <discord token> and -d <data source, like user:pass@tcp(ip:3306)/database>
+
+This bot has been pretty much replace by (messageCounter)[https://github.com/TheTipo01/messageCounter]
